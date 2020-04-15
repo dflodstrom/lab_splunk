@@ -1,0 +1,6 @@
+#!/bin/bash
+file=`date --date='yesterday' +"%m-%d-%Y"`
+wget -O $SPLUNK_HOME$/etc/apps/fmac_covid19/lookups/outbreak.csv --no-check-certificate https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv
+wget -O $SPLUNK_HOME$/etc/apps/fmac_covid19/lookups/outbreak_deaths.csv --no-check-certificate https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv
+wget -O $SPLUNK_HOME$/etc/apps/fmac_covid19/lookups/outbreak_recovered.csv --no-check-certificate https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Recovered.csv
+wget -O $SPLUNK_HOME$/etc/apps/fmac_covid19/lookups/outbreak_report.csv --no-check-certificate https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/"$file".csv

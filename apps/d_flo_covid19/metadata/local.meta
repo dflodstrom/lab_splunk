@@ -1,0 +1,40 @@
+[views/outbreak_map]
+version = 8.0.2.1
+modtime = 1586011998.706434000
+
+[views/us_outbreak_map]
+version = 8.0.2.1
+modtime = 1586914419.617211000
+
+[nav/default]
+version = 8.0.2.1
+modtime = 1584895976.712815000
+
+[views/covid19_outbreak]
+owner = admin
+version = 8.0.2.1
+modtime = 1585534862.745519000
+
+[props/covid19%3Adailyreport%3Acsv]
+owner = admin
+version = 8.0.2.1
+modtime = 1585058755.620779000
+
+[inputs/monitor%3A%2F%2F%2FApplications%2FSplunk%2Fetc%2Fapps%2Fd_flo_covid19%2Flookups%2Fjhsu]
+owner = admin
+version = 8.0.2.1
+modtime = 1585060340.145276000
+
+[savedsearches/New%20US%20Infections]
+access = read : [ * ], write : [ admin ]
+export = none
+owner = admin
+version = 8.0.2.1
+modtime = 1586639053.098983000
+
+[savedsearches/Daily%20US%20Infection%20Update]
+access = read : [ * ], write : [ admin ]
+export = none
+owner = admin
+version = 8.0.2.1
+modtime = 1585351772.054142000

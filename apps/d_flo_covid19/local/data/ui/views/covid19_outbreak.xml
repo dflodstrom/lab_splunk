@@ -1,0 +1,462 @@
+<form theme="dark" hideFilters="true">
+  <label>COVID-19 Outbreak Overview</label>
+  <description>Confirmed infection data from Johns Hopkins University https://github.com/CSSEGISandData/COVID-19</description>
+  <search id="get_latest_timestamp">
+    <query>| inputlookup outbreak_report.csv
+|  sort limit=0 - "Last_Update"
+| head 1
+|  fields "Last_Update"
+| rename "Last_Update" as update</query>
+    <done>
+      <set token="update">$result.update$</set>
+    </done>
+  </search>
+  <fieldset submitButton="false">
+    <input type="multiselect" token="exclude">
+      <label>Bubble Chart Exclusions</label>
+      <default>China,Cruise Ship</default>
+      <valuePrefix>AND country!="</valuePrefix>
+      <valueSuffix>"</valueSuffix>
+      <delimiter> </delimiter>
+      <fieldForLabel>country</fieldForLabel>
+      <fieldForValue>country</fieldForValue>
+      <search>
+        <query>| inputlookup outbreak.csv
+| fields - "Province/State", Lat, Long
+| rename "Country/Region" as country
+| stats count by country
+|  fields - count</query>
+        <earliest>-24h@h</earliest>
+        <latest>now</latest>
+      </search>
+    </input>
+  </fieldset>
+  <row>
+    <panel>
+      <single>
+        <title>Global Confirmed Infections - 3-day Trend</title>
+        <search>
+          <query>| inputlookup outbreak.csv
+| fields - "Province/State", Lat, Long
+| rename "Country/Region" as country
+| untable country _time count
+| eval _time=strptime(_time, "%m/%d/%y")
+| stats sum(count) as "count" by _time</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="height">122</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="trendDisplayMode">percent</option>
+        <option name="trendInterval">-3d</option>
+        <option name="underLabel">as of $update$</option>
+      </single>
+      <single>
+        <title>US Confirmed Infections - 3-day Trend</title>
+        <search>
+          <query>| inputlookup outbreak.csv
+| fields - "Province/State", Lat, Long
+| rename "Country/Region" as country
+| untable country _time count
+| where country="US"
+| eval _time=strptime(_time, "%m/%d/%y")
+| stats sum(count) as "count" by _time</query>
+          <earliest>-24h@h</earliest>
+          <latest>@d</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="height">126</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trendDisplayMode">percent</option>
+        <option name="trendInterval">-3d</option>
+        <option name="underLabel">3-day Trend</option>
+      </single>
+      <single>
+        <title>US Daily Confirmed Infection Change</title>
+        <search>
+          <done>
+            <set token="prev">$result.prev$</set>
+          </done>
+          <query>| inputlookup outbreak.csv
+| fields - "Province/State", Lat, Long
+| rename "Country/Region" as country
+| untable country _time count
+| where country="US"
+| eval _time=strptime(_time, "%m/%d/%y")
+| stats sum(count) as "count" by _time
+| sort limit=0 - _time
+| head 2
+| reverse
+|  streamstats current=f window=2 last(count) as prev
+| eval change=count-prev, perc_change=round(round(change/prev, 3)*100,1)
+| eval change=tostring(change, "commas")
+| eval desc=change." new cases +".perc_change."%"
+| sort limit=0 - change
+|  fields desc, prev
+|  fields - _time</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="height">126</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trendDisplayMode">absolute</option>
+        <option name="trendInterval">-3d</option>
+        <option name="underLabel">From $prev$</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <single>
+        <title>Largest Daily Confirmed Infection Increase</title>
+        <search>
+          <query>| inputlookup outbreak.csv
+| fields - "Province/State", Lat, Long
+| rename "Country/Region" as country
+| untable country _time count
+| stats sum(count) as "count" by country _time
+| eval time=_time, _time=strptime(_time, "%m/%d/%y")
+| sort limit=0 + _time
+| streamstats current=f last(count) as ycount by country
+| eval change=count-ycount
+| where change &gt; 0
+| eval change_perc=round(round(change/ycount, 3)*100,1)
+| sort limit=0 - _time change_perc
+| where count&gt;50 AND ycount&gt;50
+| eval desc=country." - ".change_perc."%"
+| head 1
+| fields desc</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="underLabel">At Least 50 Confirmed Cases</option>
+      </single>
+      <single>
+        <title>Countries with Confirmed Infections</title>
+        <search>
+          <query>| inputlookup outbreak.csv
+| fields - "Province/State", Lat, Long
+| rename "Country/Region" as country
+| untable country _time count
+| eval _time=strptime(_time, "%m/%d/%y")
+| where count&gt;0
+| stats dc(country) as "count" by _time
+| timechart span=1d values(count) as "count"</query>
+          <earliest>-24h@h</earliest>
+          <latest>@d</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trendInterval">-3d</option>
+        <option name="underLabel">3-day Trend</option>
+      </single>
+      <single>
+        <title>Global Deaths - 3-day Trend</title>
+        <search>
+          <query>| inputlookup outbreak_deaths.csv
+| fields - "Province/State", Lat, Long
+| rename "Country/Region" as country
+| untable country _time count
+| eval _time=strptime(_time, "%m/%d/%y")
+| stats sum(count) as "count" by _time</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="trendInterval">-3d</option>
+        <option name="underLabel">At Least 50 Confirmed Cases</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <viz type="leaflet_maps_app.maps-plus">
+        <search>
+          <query>| inputlookup outbreak_report.csv
+| rename "Country_Region" as Country "Province_State" as region Confirmed as total Recovered as Recoveries
+| where Country="US"
+| eval Country="United States"
+| rename Lat as lat Long_ as lon Country as country
+| eventstats sum(total) as infections sum(Deaths) as deaths sum(Recoveries) as recoveries by region
+| sort + Combined_Key 
+|  dedup region
+| eval perc_recovery=round(round(recoveries/infections,3)*100,1)
+| fillnull value="0"
+| eval description = "&lt;b&gt;" + region + "&lt;/b&gt;&lt;span&gt;&lt;p&gt;Confirmed: " + infections + "&lt;/p&gt;&lt;p&gt;Deaths: " + deaths +"&lt;/p&gt;&lt;p&gt;Recovery %: " + perc_recovery + "&lt;/p&gt;&lt;/span&gt;" , markerType="circle", circleRadius=log(infections)*10, circleRadius=if(circleRadius&lt;5, 5, circleRadius), circleFillOpacity="0.1", circleStroke="true", circleWeight=1, circleOpacity=.3, circleColor="#DC4E41", layerGroup="All", layerGroup=if(users&gt;0, "States with Users", "All Other States"), layerDescription=layerGroup
+| table lat, lon, description, markerType, circleRadius, circleFillOpacity, circleStroke, circleColor, layerGroup, layerDescription, circleOpacity, circleWeight
+| dedup lat lon
+| rename lat as latitude lon as longitude</query>
+          <earliest>0</earliest>
+          <latest></latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="leaflet_maps_app.maps-plus.allPopups">0</option>
+        <option name="leaflet_maps_app.maps-plus.animate">1</option>
+        <option name="leaflet_maps_app.maps-plus.autoFitAndZoom">0</option>
+        <option name="leaflet_maps_app.maps-plus.autoFitAndZoomDelay">500</option>
+        <option name="leaflet_maps_app.maps-plus.bingMaps">0</option>
+        <option name="leaflet_maps_app.maps-plus.bingMapsLabelLanguage">en-US</option>
+        <option name="leaflet_maps_app.maps-plus.bingMapsTileLayer">CanvasLight</option>
+        <option name="leaflet_maps_app.maps-plus.cluster">0</option>
+        <option name="leaflet_maps_app.maps-plus.contextMenu">1</option>
+        <option name="leaflet_maps_app.maps-plus.criticalThreshold">80</option>
+        <option name="leaflet_maps_app.maps-plus.defaultHeight">600</option>
+        <option name="leaflet_maps_app.maps-plus.disableClusteringAtZoom">1</option>
+        <option name="leaflet_maps_app.maps-plus.drilldown">0</option>
+        <option name="leaflet_maps_app.maps-plus.drilldownAction">dblclick</option>
+        <option name="leaflet_maps_app.maps-plus.fullScreen">0</option>
+        <option name="leaflet_maps_app.maps-plus.googlePlacesPosition">topleft</option>
+        <option name="leaflet_maps_app.maps-plus.googlePlacesSearch">0</option>
+        <option name="leaflet_maps_app.maps-plus.googlePlacesZoomLevel">12</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapBlur">15</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapColorGradient">{"0.4":"blue","0.6":"cyan","0.7":"lime","0.8":"yellow","1":"red"}</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapEnable">0</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapMinOpacity">1.0</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapOnly">0</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapRadius">25</option>
+        <option name="leaflet_maps_app.maps-plus.i18nLanguage">en</option>
+        <option name="leaflet_maps_app.maps-plus.layerControl">0</option>
+        <option name="leaflet_maps_app.maps-plus.layerControlCollapsed">1</option>
+        <option name="leaflet_maps_app.maps-plus.mapCenterLat">39.50</option>
+        <option name="leaflet_maps_app.maps-plus.mapCenterLon">-98.35</option>
+        <option name="leaflet_maps_app.maps-plus.mapCenterZoom">4</option>
+        <option name="leaflet_maps_app.maps-plus.mapTile">http://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png</option>
+        <option name="leaflet_maps_app.maps-plus.maxClusterRadius">80</option>
+        <option name="leaflet_maps_app.maps-plus.maxSpiderfySize">100</option>
+        <option name="leaflet_maps_app.maps-plus.maxZoom">19</option>
+        <option name="leaflet_maps_app.maps-plus.measureActiveColor">#00ff00</option>
+        <option name="leaflet_maps_app.maps-plus.measureCompletedColor">#0066ff</option>
+        <option name="leaflet_maps_app.maps-plus.measureIconPosition">topright</option>
+        <option name="leaflet_maps_app.maps-plus.measureLocalization">en</option>
+        <option name="leaflet_maps_app.maps-plus.measurePrimaryAreaUnit">acres</option>
+        <option name="leaflet_maps_app.maps-plus.measurePrimaryLengthUnit">feet</option>
+        <option name="leaflet_maps_app.maps-plus.measureSecondaryAreaUnit">sqmiles</option>
+        <option name="leaflet_maps_app.maps-plus.measureSecondaryLengthUnit">miles</option>
+        <option name="leaflet_maps_app.maps-plus.measureTool">0</option>
+        <option name="leaflet_maps_app.maps-plus.minZoom">4</option>
+        <option name="leaflet_maps_app.maps-plus.multiplePopups">0</option>
+        <option name="leaflet_maps_app.maps-plus.pathColorList">#0003F0,#D43C29,darkgreen,0xe2d400,darkred,#23A378</option>
+        <option name="leaflet_maps_app.maps-plus.pathSplitInterval">60</option>
+        <option name="leaflet_maps_app.maps-plus.pathSplits">0</option>
+        <option name="leaflet_maps_app.maps-plus.permanentTooltip">0</option>
+        <option name="leaflet_maps_app.maps-plus.playbackSpeed">100</option>
+        <option name="leaflet_maps_app.maps-plus.playbackTickLength">50</option>
+        <option name="leaflet_maps_app.maps-plus.rangeOneBgColor">#B5E28C</option>
+        <option name="leaflet_maps_app.maps-plus.rangeOneFgColor">#6ECC39</option>
+        <option name="leaflet_maps_app.maps-plus.rangeThreeBgColor">#FD9C73</option>
+        <option name="leaflet_maps_app.maps-plus.rangeThreeFgColor">#F18017</option>
+        <option name="leaflet_maps_app.maps-plus.rangeTwoBgColor">#F1D357</option>
+        <option name="leaflet_maps_app.maps-plus.rangeTwoFgColor">#F0C20C</option>
+        <option name="leaflet_maps_app.maps-plus.refreshInterval">0</option>
+        <option name="leaflet_maps_app.maps-plus.renderer">svg</option>
+        <option name="leaflet_maps_app.maps-plus.scrollWheelZoom">0</option>
+        <option name="leaflet_maps_app.maps-plus.showPathLines">0</option>
+        <option name="leaflet_maps_app.maps-plus.showPlayback">0</option>
+        <option name="leaflet_maps_app.maps-plus.showPlaybackDateControl">1</option>
+        <option name="leaflet_maps_app.maps-plus.showPlaybackPlayControl">1</option>
+        <option name="leaflet_maps_app.maps-plus.showPlaybackSliderControl">1</option>
+        <option name="leaflet_maps_app.maps-plus.showProgress">1</option>
+        <option name="leaflet_maps_app.maps-plus.singleMarkerMode">0</option>
+        <option name="leaflet_maps_app.maps-plus.spiderfyDistanceMultiplier">1</option>
+        <option name="leaflet_maps_app.maps-plus.stickyTooltip">1</option>
+        <option name="leaflet_maps_app.maps-plus.warningThreshold">55</option>
+        <option name="refresh.display">progressbar</option>
+      </viz>
+    </panel>
+    <panel>
+      <viz type="leaflet_maps_app.maps-plus">
+        <search>
+          <query>| inputlookup outbreak_report.csv
+| rename "Country_Region" as Country "Province_State" as region Confirmed as total Recovered as Recoveries
+| stats sum(total) as total sum(Deaths) as deaths sum(Recoveries) as recoveries by Country
+| rename total as count
+| lookup outbreak_report.csv "Country_Region" as Country OUTPUT Lat Long_
+| eval Latitude=mvindex(Latitude,0), Longitude=mvindex(Longitude,0)
+| rename Lat as lat Long_ as lon
+| eval Country=if(Country="US", "United States", Country)
+| rename Country as country
+| stats values(*) as * by country
+| eval rec_rate=round(round(recoveries/count, 3)*100,2), d_rate=round(round(deaths/count, 3)*100, 2)
+| fillnull value="0"
+| eval description = "&lt;b&gt;" + country + "&lt;/b&gt;&lt;span&gt;&lt;p&gt;Confirmed: " + count + "&lt;/p&gt;&lt;p&gt;Deaths: " + deaths +"&lt;/p&gt;&lt;p&gt;Recovery %: " + rec_rate + "&lt;/p&gt;&lt;p&gt;Death %: " + d_rate + "&lt;/p&gt;&lt;/span&gt;" , markerType="circle", circleRadius=log(count)*10, circleRadius=if(circleRadius&lt;5, 5, circleRadius), circleFillOpacity="0.1", circleStroke="true", circleWeight=1, circleOpacity=.3, circleColor="#DC4E41", layerGroup="All", layerGroup=if(users&gt;0, "States with Users", "All Other States"), layerDescription=layerGroup
+| table lat, lon, description, markerType, circleRadius, circleFillOpacity, circleStroke, circleColor, layerGroup, layerDescription, circleOpacity, circleWeight
+| dedup lat lon
+| rename lat as latitude lon as longitude</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="height">545</option>
+        <option name="leaflet_maps_app.maps-plus.allPopups">0</option>
+        <option name="leaflet_maps_app.maps-plus.animate">1</option>
+        <option name="leaflet_maps_app.maps-plus.autoFitAndZoom">1</option>
+        <option name="leaflet_maps_app.maps-plus.autoFitAndZoomDelay">500</option>
+        <option name="leaflet_maps_app.maps-plus.bingMaps">0</option>
+        <option name="leaflet_maps_app.maps-plus.bingMapsLabelLanguage">en-US</option>
+        <option name="leaflet_maps_app.maps-plus.bingMapsTileLayer">CanvasLight</option>
+        <option name="leaflet_maps_app.maps-plus.cluster">0</option>
+        <option name="leaflet_maps_app.maps-plus.contextMenu">1</option>
+        <option name="leaflet_maps_app.maps-plus.criticalThreshold">80</option>
+        <option name="leaflet_maps_app.maps-plus.defaultHeight">600</option>
+        <option name="leaflet_maps_app.maps-plus.disableClusteringAtZoom">1</option>
+        <option name="leaflet_maps_app.maps-plus.drilldown">0</option>
+        <option name="leaflet_maps_app.maps-plus.drilldownAction">dblclick</option>
+        <option name="leaflet_maps_app.maps-plus.fullScreen">0</option>
+        <option name="leaflet_maps_app.maps-plus.googlePlacesPosition">topleft</option>
+        <option name="leaflet_maps_app.maps-plus.googlePlacesSearch">0</option>
+        <option name="leaflet_maps_app.maps-plus.googlePlacesZoomLevel">12</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapBlur">15</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapColorGradient">{"0.4":"blue","0.6":"cyan","0.7":"lime","0.8":"yellow","1":"red"}</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapEnable">0</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapMinOpacity">1.0</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapOnly">0</option>
+        <option name="leaflet_maps_app.maps-plus.heatmapRadius">25</option>
+        <option name="leaflet_maps_app.maps-plus.i18nLanguage">en</option>
+        <option name="leaflet_maps_app.maps-plus.layerControl">1</option>
+        <option name="leaflet_maps_app.maps-plus.layerControlCollapsed">1</option>
+        <option name="leaflet_maps_app.maps-plus.mapCenterLat">39.50</option>
+        <option name="leaflet_maps_app.maps-plus.mapCenterLon">20</option>
+        <option name="leaflet_maps_app.maps-plus.mapCenterZoom">2</option>
+        <option name="leaflet_maps_app.maps-plus.mapTile">http://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png</option>
+        <option name="leaflet_maps_app.maps-plus.maxClusterRadius">80</option>
+        <option name="leaflet_maps_app.maps-plus.maxSpiderfySize">100</option>
+        <option name="leaflet_maps_app.maps-plus.maxZoom">19</option>
+        <option name="leaflet_maps_app.maps-plus.measureActiveColor">#00ff00</option>
+        <option name="leaflet_maps_app.maps-plus.measureCompletedColor">#0066ff</option>
+        <option name="leaflet_maps_app.maps-plus.measureIconPosition">topright</option>
+        <option name="leaflet_maps_app.maps-plus.measureLocalization">en</option>
+        <option name="leaflet_maps_app.maps-plus.measurePrimaryAreaUnit">acres</option>
+        <option name="leaflet_maps_app.maps-plus.measurePrimaryLengthUnit">feet</option>
+        <option name="leaflet_maps_app.maps-plus.measureSecondaryAreaUnit">sqmiles</option>
+        <option name="leaflet_maps_app.maps-plus.measureSecondaryLengthUnit">miles</option>
+        <option name="leaflet_maps_app.maps-plus.measureTool">0</option>
+        <option name="leaflet_maps_app.maps-plus.minZoom">2</option>
+        <option name="leaflet_maps_app.maps-plus.multiplePopups">0</option>
+        <option name="leaflet_maps_app.maps-plus.pathColorList">#0003F0,#D43C29,darkgreen,0xe2d400,darkred,#23A378</option>
+        <option name="leaflet_maps_app.maps-plus.pathSplitInterval">60</option>
+        <option name="leaflet_maps_app.maps-plus.pathSplits">0</option>
+        <option name="leaflet_maps_app.maps-plus.permanentTooltip">0</option>
+        <option name="leaflet_maps_app.maps-plus.playbackSpeed">100</option>
+        <option name="leaflet_maps_app.maps-plus.playbackTickLength">50</option>
+        <option name="leaflet_maps_app.maps-plus.rangeOneBgColor">#B5E28C</option>
+        <option name="leaflet_maps_app.maps-plus.rangeOneFgColor">#6ECC39</option>
+        <option name="leaflet_maps_app.maps-plus.rangeThreeBgColor">#FD9C73</option>
+        <option name="leaflet_maps_app.maps-plus.rangeThreeFgColor">#F18017</option>
+        <option name="leaflet_maps_app.maps-plus.rangeTwoBgColor">#F1D357</option>
+        <option name="leaflet_maps_app.maps-plus.rangeTwoFgColor">#F0C20C</option>
+        <option name="leaflet_maps_app.maps-plus.refreshInterval">0</option>
+        <option name="leaflet_maps_app.maps-plus.renderer">svg</option>
+        <option name="leaflet_maps_app.maps-plus.scrollWheelZoom">0</option>
+        <option name="leaflet_maps_app.maps-plus.showPathLines">0</option>
+        <option name="leaflet_maps_app.maps-plus.showPlayback">0</option>
+        <option name="leaflet_maps_app.maps-plus.showPlaybackDateControl">1</option>
+        <option name="leaflet_maps_app.maps-plus.showPlaybackPlayControl">1</option>
+        <option name="leaflet_maps_app.maps-plus.showPlaybackSliderControl">1</option>
+        <option name="leaflet_maps_app.maps-plus.showProgress">1</option>
+        <option name="leaflet_maps_app.maps-plus.singleMarkerMode">0</option>
+        <option name="leaflet_maps_app.maps-plus.spiderfyDistanceMultiplier">1</option>
+        <option name="leaflet_maps_app.maps-plus.stickyTooltip">1</option>
+        <option name="leaflet_maps_app.maps-plus.warningThreshold">55</option>
+        <option name="refresh.display">progressbar</option>
+      </viz>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <title>Day-to-Day Change in Confirmed Case Count  - bubble size indicates change % - minimum 25% change, 50 confirmed cases</title>
+      <chart>
+        <search>
+          <query>| inputlookup outbreak.csv
+| fields - "Province/State", Lat, Long
+| rename "Country/Region" as country
+| where country!="foo" $exclude$
+| untable country _time count
+| fillnull value="0"
+| stats sum(count) as "count" by country _time
+| eval _time=strptime(_time, "%m/%d/%y")
+| sort limit=0 + _time
+| streamstats dc(_time) as day
+| streamstats current=f last(count) as "lcount" by country
+| eval change=count-lcount
+| eval change_perc=round(round(change/lcount, 3)*100,2)
+| eventstats max(count) as total by country
+| table country day count change_perc day *
+| eval change_perc=if(count&gt;lcount AND change_perc="0.00","0.01",change_perc)
+| where change_perc&gt;25 AND count&gt;50 AND lcount&gt;50 
+| rename change_perc as "Change %"</query>
+          <earliest>-24h@h</earliest>
+          <latest>@d</latest>
+        </search>
+        <option name="charting.axisLabelsX.majorUnit">1</option>
+        <option name="charting.axisTitleX.text">Day</option>
+        <option name="charting.axisTitleY.text">Confirmed Cases</option>
+        <option name="charting.axisX.abbreviation">none</option>
+        <option name="charting.axisY.minimumNumber">40</option>
+        <option name="charting.axisY.scale">log</option>
+        <option name="charting.chart">bubble</option>
+        <option name="charting.chart.bubbleMaximumSize">45</option>
+        <option name="charting.chart.bubbleMinimumSize">5</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.legend.labelStyle.overflowMode">ellipsisEnd</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <search>
+          <query>| inputlookup outbreak_deaths.csv 
+| fields - "Province/State", Lat, Long 
+| rename "Country/Region" as country 
+| untable country _time count 
+| eval _time=strptime(_time, "%m/%d/%y") 
+| stats sum(count) as "count" by _time 
+| rename count as deaths 
+| append 
+    [| inputlookup outbreak_recovered.csv 
+    | fields - "Province/State", Lat, Long 
+    | rename "Country/Region" as country 
+    | untable country _time count 
+    | eval _time=strptime(_time, "%m/%d/%y") 
+    | stats sum(count) as "count" by _time 
+    | rename count as recoveries] 
+| append 
+    [| inputlookup outbreak.csv 
+    | fields - "Province/State", Lat, Long 
+    | rename "Country/Region" as country 
+    | untable country _time count 
+    | eval _time=strptime(_time, "%m/%d/%y") 
+    | stats sum(count) as "count" by _time 
+    | rename count as "Confirmed Infections"] 
+| stats values(*) as * by _time 
+| streamstats max(recoveries) as max_rec 
+| eval recoveries=if(max_rec&gt;recoveries, max_rec, recoveries) 
+| timechart span=1d values("Confirmed Infections") as "Confirmed Infections" values(recoveries) as Recoveries values(deaths) as Deaths</query>
+          <earliest>-24h@h</earliest>
+          <latest>@d</latest>
+        </search>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.axisTitleY.visibility">collapsed</option>
+        <option name="charting.axisY.abbreviation">auto</option>
+        <option name="charting.axisY.scale">linear</option>
+        <option name="charting.chart">area</option>
+        <option name="charting.chart.showDataLabels">minmax</option>
+        <option name="charting.drilldown">none</option>
+        <option name="charting.legend.placement">right</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+</form>

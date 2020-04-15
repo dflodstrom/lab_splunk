@@ -1,0 +1,5 @@
+<nav search_view="search" color="#7A1F1F">
+  <view name="covid19_outbreak" default="true" />
+  <view name="outbreak_map" />
+  <view name="us_outbreak_map" />
+</nav>

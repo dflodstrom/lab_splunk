@@ -1,0 +1,10 @@
+<nav search_view="search" color="#7A1F1F">
+  <view name="outbreak_map" default="true" />
+  <view name="us_outbreak_map" default="true" />
+  <view name="search" />
+  <view name="datasets" />
+  <view name="reports" />
+  <view name="alerts" />
+  <view name="dashboards" />
+</nav>
+
